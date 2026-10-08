@@ -1,0 +1,19 @@
+# 배포 키트·데이터: 용량과 재배포 문제로 커밋하지 않는다
+kits/
+data/
+dist/
+*.zip
+*.xz
+
+# 가상환경·캐시
+.venv*/
+__pycache__/
+*.pyc
+
+# 실험 산출물: 요약(README.md)만 커밋
+results/*
+!results/README.md
+*.pt
+
+# 비교용 임시 후보 Agent
+agents/cand_*/

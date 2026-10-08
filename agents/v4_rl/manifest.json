@@ -1,0 +1,7 @@
+{
+  "id": "myteam_v4_rl",
+  "name": "V4 GA+RL",
+  "kind": "rule",
+  "description": "Placement search + hold, GA-tuned linear afterstate evaluation",
+  "entry": "agent.py"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "myteam_v1_hold",
+  "name": "V1 Hold (baseline)",
+  "kind": "rule",
+  "description": "Placement search + hold, GA-tuned linear afterstate evaluation",
+  "entry": "agent.py"
+}

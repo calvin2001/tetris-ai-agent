@@ -1,0 +1,11 @@
+{
+  "weights": {
+    "landing_height": -4.5,
+    "eroded_cells": 3.418,
+    "row_transitions": -3.218,
+    "col_transitions": -9.349,
+    "holes": -7.899,
+    "wells": -3.386
+  },
+  "use_hold": true
+}
