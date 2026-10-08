@@ -1,9 +1,9 @@
-# 추가 실험: PPO로 배치 정책 미세 조정
+# PPO로 배치 정책 미세 조정
 
 > 대상: `src/ppo_train.py`
 > 출발점: 최종 Agent v6의 GA 가중치
-> 확인한 것: 그래디언트 계산이 수치 미분과 일치(오차 1e-9 수준), 학습 루프가 끝까지 돌아감, 결과 `model.json`이 제출 검증을 통과함
-> 확인하지 않은 것: **성능이 오르는지.** 반드시 v6와 맞대결로 판단한다.
+> 검증: 그래디언트 계산이 수치 미분과 일치(오차 1e-9 수준), 업데이트 전 행동 확률이 경기 중 값과 일치(오차 1e-14 수준), 결과 `model.json`이 제출 검증을 통과
+> 결과: 학습은 안정적이었지만 **v6 상대 57/120(47.5%)으로 개선되지 않았다** (§6)
 
 ---
 
@@ -49,7 +49,7 @@ logit = (w · φ) / T
 
 w는 **v6의 GA 가중치로 시작**한다. 그래서 처음부터 v6와 비슷한 수준에서 출발하고, PPO는 미세 조정만 한다. 무작위에서 시작하면 학습이 매우 오래 걸린다.
 
-**온도 T = 1**로 잡은 근거: v6 가중치로 실제 경기 274번의 결정을 측정해 보니, 1등과 2등 후보의 점수 차이 중앙값이 약 0.5였다. T = 2에서는 1등 확률이 평균 0.59, T = 5에서는 0.39였다. 앞의 RL 실험에서 무작위 배치 5%만으로도 크게 약해졌기 때문에, 탐험이 너무 많지 않도록 T = 1에서 시작한다.
+**온도 T = 0.3**으로 정한 과정: v6 가중치로 실제 경기 274번의 결정을 측정해 보니, 1등과 2등 후보의 점수 차이 중앙값이 약 0.5였다. 처음에는 T = 1로 시작했는데, 학습 중 승률이 약 20%에 그쳐 탐험이 너무 많았다. 지는 경기만으로는 무엇이 좋은 행동인지 배우기 어렵다. 그래서 T = 0.3으로 낮추고 상대에 약한 v1과 dellacherie를 섞어서, 학습 중 승률이 50% 안팎이 되게 했다.
 
 ### 가치 (Critic)
 
@@ -102,13 +102,13 @@ Step 6 RL과 같다. 공격 1줄당 +0.05, 경기 끝에 승리 +1 / 패배 −1
 cd ~/projects/tetris-ai-agent
 source .venv/bin/activate
 nohup python src/ppo_train.py --init agents/my_agent/model.json \
-  --vs agents/my_agent/model.json agents/v5_d2/model.json \
-  --iters 30 --games 40 --workers 10 --out results/ppo > results/ppo.log 2>&1 &
+  --vs agents/my_agent/model.json agents/v1_hold/model.json dellacherie \
+  --temp 0.3 --lr 0.005 --games 80 --iters 30 --workers 10 --out results/ppo > results/ppo.log 2>&1 &
 tail -f results/ppo.log
 ```
 
-- 상대: v6 자신과 v5 (학습 속도를 위해 상대는 1수 탐색으로 실행)
-- 예상 시간: 반복당 30~60초, 30회면 **20~30분**
+- 상대: v6 자신, v1, dellacherie (학습 속도를 위해 상대는 1수 탐색으로 실행)
+- 걸린 시간: 반복당 약 55초, 30회 약 27분 (논리 코어 12개, workers 10)
 
 ### 로그 읽기
 
@@ -131,13 +131,13 @@ tail -f results/ppo.log
 
 | 옵션 | 기본값 | 뜻 |
 |---|---:|---|
-| `--temp` | 1.0 | softmax 온도 |
-| `--lr` | 0.01 | 학습률 (Adam) |
+| `--temp` | 1.0 | softmax 온도 (실제 사용: 0.3) |
+| `--lr` | 0.01 | 학습률 (Adam, 실제 사용: 0.005) |
 | `--clip` | 0.2 | 클리핑 범위 |
 | `--epochs` | 4 | 같은 데이터로 업데이트하는 횟수 |
 | `--target-kl` | 0.02 | 정책 변화 상한 |
 | `--ent` | 0.001 | 엔트로피 보너스 |
-| `--iters`, `--games` | 30, 40 | 반복 수, 반복당 경기 수 |
+| `--iters`, `--games` | 30, 40 | 반복 수, 반복당 경기 수 (실제 사용: 30, 80) |
 
 ---
 
@@ -154,7 +154,7 @@ for it in 09 19 29; do
   cp -r agents/my_agent agents/cand_ppo$it
   cp results/ppo/iter${it}_model.json agents/cand_ppo$it/model.json
   sed -i "s/\"id\": \"[^\"]*\"/\"id\": \"myteam_ppo_$it\"/; s/\"name\": \"[^\"]*\"/\"name\": \"PPO iter $it\"/" agents/cand_ppo$it/manifest.json
-  echo "iter $it: $(python kits/tetris_competition_kit_v2/tools/evaluate.py agents/cand_ppo$it agents/my_agent --games 40 --seed 10000000 | tail -1)"
+  echo "iter $it: $(python kits/tetris_competition_kit_v2/tools/evaluate.py agents/cand_ppo$it agents/my_agent --games 40 --seed 10400000 | tail -1)"
 done
 EOF
 nohup bash eval_ppo.sh > results/eval_ppo.log 2>&1 &
@@ -172,11 +172,35 @@ python kits/tetris_competition_kit_v2/tools/evaluate.py agents/cand_ppo29 agents
 
 ---
 
-## 6. 예상 결과와 한계
+## 6. 결과
 
-- **v6가 이미 강해서 개선 폭은 작을 수 있다.** GA로 찾은 가중치가 이미 좋은 지점이라, PPO는 그 근처를 다듬는 정도다.
-- **노이즈가 크다.** 승패 보상은 경기 끝에 한 번이고 조각 운이 크다. 반복당 40경기는 PPO 기준으로 적은 편이다. `--games 80`으로 늘리면 안정되지만 시간이 두 배다.
+### 학습 로그
+
+| 항목 | 값 |
+|---|---|
+| 학습 중 승률 | 반복 0~9 평균 0.54 → 20~29 평균 0.58 |
+| KL | 약 0.001 (상한 0.02 안쪽, 조기 종료 없이 업데이트) |
+| 엔트로피 | 0.41 ~ 0.46으로 안정 |
+
+### 가중치 변화 (v6 → 반복 29)
+
+대부분 ±0.4 이내였고, **`attack`만 2.35 → 4.68로 두 배**가 됐다. `cancel`도 −2.03 → −2.60으로 더 음수가 됐다. PPO가 "상쇄보다 공격"이라는 방향을 일관되게 밀었다는 뜻이다. GA가 v6에서 찾은 "공격 우선" 성향을 더 강화한 셈이다.
+
+### 평가 (1등 선택 + 2수 앞보기, v6 상대 40경기, seed 10400000)
+
+| 반복 | 결과 |
+|---|---:|
+| 9 | 20/40 |
+| 19 | 17/40 |
+| 29 | 20/40 |
+
+합계 57/120(47.5%)으로 v6와 차이가 없어 채택하지 않았다.
+
+## 7. 왜 넘지 못했나
+
+- **v6가 이미 강했다.** GA로 찾은 가중치가 이미 좋은 지점이라, PPO는 그 근처를 다듬는 정도다.
+- **노이즈가 크다.** 승패 보상은 경기 끝에 한 번이고 조각 운이 크다. 반복당 80경기(약 5만 6천 번의 결정)도 PPO 기준으로는 적은 편이다.
 - **학습은 1수, 평가는 2수다.** 학습 중에는 빠르게 1수 탐색으로 고르고, 평가 때는 v6처럼 2수 앞보기를 켠다. 1수 기준으로 좋아진 가중치가 2수에서도 좋다는 보장은 없다.
 - **선형 정책이다.** 특징 16개의 선형 함수라 표현력은 GA와 같다. 차이는 "찾는 방법"뿐이다. 그래서 이 실험은 **"같은 정책 공간에서 GA와 PPO 중 어느 쪽이 더 잘 찾나"**를 비교하는 실험이기도 하다.
 
-어떤 결과가 나와도 README의 "추가 실험"으로 기록할 가치가 있다. 세미나에서 다룬 PPO를 실제 대전 환경에 적용하고, GA와 직접 비교한 결과가 되기 때문이다.
+정리하면, 같은 정책 형태 안에서는 **GA가 찾은 해가 이미 좋은 지점**이었고, PPO는 그 근처에서 학습 환경 기준으로 조금 나은 방향(공격 강화)을 찾았지만 실전 방식에서는 차이로 이어지지 않았다. 이 프로젝트에서 성능을 크게 올린 것은 학습 방법보다 **Agent가 보는 정보(특징)와 탐색 깊이**였다.
